@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           
           {/* Logo Area */}
           <div className="flex items-center justify-between mb-8 px-2">
-            <div className="flex items-center gap-2 text-indigo-400">
+            <div className="flex items-center gap-3 text-indigo-400">
               <AtlasLogo size={32} />
               <h1 className="text-xl font-bold text-white tracking-tight">Atlas</h1>
             </div>

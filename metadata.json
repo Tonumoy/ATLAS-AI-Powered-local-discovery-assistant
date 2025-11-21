@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Atlas",
+  "name": "Atlas",
   "description": "A sophisticated multilingual AI assistant for discovering the best nearby places with real-time Google Maps integration.",
   "requestFramePermissions": [
     "geolocation",

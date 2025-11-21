@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Send, Loader2, Mic, MicOff, Volume2, VolumeX, Languages, X, Headphones, MessageSquare, Settings, UserCircle } from 'lucide-react';
@@ -457,18 +456,15 @@ function App() {
               </button>
             )}
             
-            {/* Back to Home button if not on landing */}
-            {viewMode !== 'landing' && (
-               <button onClick={() => handleModeSwitch('landing')} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
-                 <AtlasLogo size={24} />
-                 <span className="font-bold text-lg hidden md:block">Atlas</span>
-               </button>
-            )}
-            {viewMode === 'landing' && (
-               <div className="flex items-center gap-2">
-                 <AtlasLogo size={24} />
-                 <span className="font-bold text-lg text-white">Atlas</span>
-               </div>
+            {/* Header Logo - Visible only in Landing and Voice modes */}
+            {viewMode !== 'chat' && (
+              <button 
+                onClick={() => handleModeSwitch('landing')} 
+                className="flex items-center gap-3 text-slate-300 hover:text-white transition-colors group"
+              >
+                <AtlasLogo size={28} className="group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-lg tracking-tight hidden md:block">Atlas</span>
+              </button>
             )}
           </div>
           
@@ -557,11 +553,7 @@ function App() {
         {viewMode === 'landing' && (
           <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 animate-in fade-in duration-700">
              <div className="text-center space-y-6 max-w-2xl flex flex-col items-center">
-                {/* Added Central Logo */}
-                <div className="mb-2 animate-float">
-                    <AtlasLogo size={80} />
-                </div>
-
+                
                 <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
                   Ask Atlas Anything.
                 </h1>
@@ -692,7 +684,7 @@ function App() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Ask about places..."
-                    className="w-full bg-slate-900/80 backdrop-blur-xl text-white rounded-2xl pl-6 pr-24 py-4 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 border border-slate-700/50 transition-all resize-none shadow-xl"
+                    className="w-full bg-slate-900/80 backdrop-blur-xl text-white rounded-2xl pl-6 pr-24 py-4 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none shadow-xl border border-slate-700"
                     rows={1}
                     style={{ minHeight: '60px', maxHeight: '120px' }}
                     onKeyDown={(e) => {
