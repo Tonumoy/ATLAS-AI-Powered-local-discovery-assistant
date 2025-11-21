@@ -131,9 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="flex-1 text-left overflow-hidden">
                 <p className="text-sm font-bold text-white truncate">{user?.name || 'Guest'}</p>
-                <p className="text-xs text-slate-500 truncate">View Settings</p>
               </div>
-              <Settings size={18} className="text-slate-500 group-hover:text-indigo-400" />
             </button>
           </div>
         </div>
