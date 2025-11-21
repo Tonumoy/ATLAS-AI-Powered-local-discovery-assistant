@@ -1,3 +1,4 @@
+
 export interface GroundingChunk {
   maps?: {
     uri?: string;
@@ -13,6 +14,11 @@ export interface GroundingChunk {
   web?: {
     uri?: string;
     title?: string;
+  };
+  extractedMetadata?: {
+    rating?: string;
+    reviews?: string;
+    distance?: string;
   };
 }
 

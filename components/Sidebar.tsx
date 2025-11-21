@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { ChatSession } from '../types';
-import { MessageSquare, Plus, X, Map, Settings, UserCircle, Trash2 } from 'lucide-react';
+import { MessageSquare, Plus, X, Settings, UserCircle, Trash2 } from 'lucide-react';
+import { AtlasLogo } from './AtlasLogo';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,7 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm animate-in fade-in duration-200"
           onClick={onClose}
         />
       )}
@@ -38,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Sidebar Content */}
       <aside className={`
         fixed top-0 left-0 h-full w-72 bg-slate-900 border-r border-slate-800 
-        transform transition-transform duration-300 ease-in-out z-50
+        transform transition-transform duration-300 ease-out z-50 shadow-2xl md:shadow-none
         md:translate-x-0 md:relative flex flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
@@ -47,11 +49,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Logo Area */}
           <div className="flex items-center justify-between mb-8 px-2">
             <div className="flex items-center gap-2 text-indigo-400">
-              <Map className="h-8 w-8" />
+              <AtlasLogo size={32} />
               <h1 className="text-xl font-bold text-white tracking-tight">Atlas</h1>
             </div>
-            <button onClick={onClose} className="md:hidden text-slate-400">
-              <X size={24} />
+            <button 
+              onClick={onClose} 
+              className="md:hidden p-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+            >
+              <X size={20} />
             </button>
           </div>
 

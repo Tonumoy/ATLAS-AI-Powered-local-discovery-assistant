@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 
 interface SphereAnimationProps {
@@ -99,17 +100,13 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
     resizeObserver.observe(container);
 
     // --- Configuration ---
-    // Reduced count for cleaner look and better spacing
-    const dotCount = 800; 
+    const dotCount = 600; 
     let globeRadius = 0;
-    // Increased radius for visibility with fewer dots
     const dotRadius = 1.6;
     
     // Physics Constants - TUNED FOR ORGANIC FLUIDITY
-    // Very low spring strength = lazy, liquid return to shape
-    const springStrength = 0.012; 
-    // High friction = silky gliding
-    const friction = 0.96; 
+    const springStrength = 0.015; // Slightly snappier reform
+    const friction = 0.95; // Silky gliding
     
     interface Dot {
       x: number; y: number; z: number;
@@ -149,8 +146,8 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
       
       // Responsive Radius
       const minDim = Math.min(canvas.width, canvas.height);
-      globeRadius = minDim * 0.22; 
-      if (window.innerWidth < 768) globeRadius = minDim * 0.30; 
+      globeRadius = minDim * 0.32; 
+      if (window.innerWidth < 768) globeRadius = minDim * 0.40; 
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
@@ -167,7 +164,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
       }
 
       // Slow idle rotation
-      angleY += 0.002; // Slower rotation
+      angleY += 0.002; 
       angleX = Math.sin(time * 0.2) * 0.1; 
 
       const cx = canvas.width / 2;
@@ -179,35 +176,32 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
         if (scatterRef.current.intensity < 0.01) scatterRef.current.active = false;
       }
 
-      const breath = Math.sin(time * 0.5) * 6; // Deeper, slower breath
+      const breath = Math.sin(time * 0.5) * 6; 
       const audioScale = (audioEnergy / 255); 
 
-      // Check if mouse is broadly within interaction range of the sphere
+      // Check interaction
       let isMouseNear = false;
       if (mouseRef.current.active) {
         const dxM = mouseRef.current.x - cx;
         const dyM = mouseRef.current.y - cy;
         const distM = Math.sqrt(dxM * dxM + dyM * dyM);
-        // Interaction zone
-        if (distM < globeRadius * 2.0) {
+        if (distM < globeRadius * 2.5) {
           isMouseNear = true;
         }
       }
 
       dots.forEach(dot => {
-        // Safety reset
         if (!isFinite(dot.x)) {
            dot.x = dot.baseX * globeRadius; dot.y = dot.baseY * globeRadius; dot.z = dot.baseZ * globeRadius;
            dot.vx = 0; dot.vy = 0; dot.vz = 0;
         }
 
-        // 1. Target Position with Living Drift
+        // 1. Target Position
         let rx = dot.baseX * Math.cos(angleY) - dot.baseZ * Math.sin(angleY);
         let rz = dot.baseZ * Math.cos(angleY) + dot.baseX * Math.sin(angleY);
         let ry = dot.baseY * Math.cos(angleX) - rz * Math.sin(angleX);
         rz = rz * Math.cos(angleX) + dot.baseY * Math.sin(angleX);
 
-        // Smoother Perlin-ish noise
         const drift = 6 * Math.sin(time * 0.8 + dot.phase) + 3 * Math.cos(time * 0.4 + dot.phase * 1.5); 
         let currentRadius = globeRadius + breath + drift + (audioEnergy * 0.2);
         
@@ -215,12 +209,12 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
         const targetY = ry * currentRadius;
         const targetZ = rz * currentRadius;
 
-        // 2. Spring Force (Return to Shape)
+        // 2. Spring Force
         dot.vx += (targetX - dot.x) * springStrength;
         dot.vy += (targetY - dot.y) * springStrength;
         dot.vz += (targetZ - dot.z) * springStrength;
 
-        // 3. Interaction: Organic Fluid Repulsion
+        // 3. Interaction: Liquid Ripple
         if (isMouseNear) {
            const perspective = 800;
            const depth = perspective + dot.z + 400;
@@ -233,34 +227,33 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
              const dy = screenY - mouseRef.current.y;
              const dist = Math.sqrt(dx*dx + dy*dy);
              
-             // Wider radius for smoother gradient
-             const repelRadius = 180; 
+             // WIDER interaction radius for smoother gradient
+             const repelRadius = 220; 
 
              if (dist < repelRadius) {
+                // Cosine-based smooth interpolation for organic feel
+                // 0 at dist=repelRadius, 1 at dist=0
                 const t = dist / repelRadius;
+                const falloff = Math.cos(t * Math.PI * 0.5); 
                 
-                // Smooth Hermite-like curve for organic falloff
-                // (1 - t^2)^2 is smoother at the top than linear
-                const falloff = Math.pow(1 - Math.pow(t, 2), 2);
                 const force = falloff * 0.8; 
-                
                 const angle = Math.atan2(dy, dx);
                 
-                // Radial push (Repel) - Gently pushes out
-                dot.vx += Math.cos(angle) * force * 2.5;
-                dot.vy += Math.sin(angle) * force * 2.5;
+                // Radial push (Repel)
+                dot.vx += Math.cos(angle) * force * 3.0;
+                dot.vy += Math.sin(angle) * force * 3.0;
                 
-                // Tangential push (Swirl/Stir) - Adds fluid vorticity
-                dot.vx -= Math.sin(angle) * force * 0.8;
-                dot.vy += Math.cos(angle) * force * 0.8;
+                // Tangential push (Swirl) - Increased for fluid vorticity
+                dot.vx -= Math.sin(angle) * force * 1.2;
+                dot.vy += Math.cos(angle) * force * 1.2;
 
-                // Z-Axis dip - Pushes "into" the screen slightly
-                dot.vz -= force * 5; 
+                // Z-Axis Ripple
+                dot.vz -= force * 6; 
              }
            }
         }
 
-        // 4. Dynamic Scatter (Explosion)
+        // 4. Dynamic Scatter
         if (scatterRef.current.active && scatterRef.current.intensity > 0.1) {
             const { intensity, variant, dirX, dirY } = scatterRef.current;
             
@@ -270,7 +263,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
                 dot.vy += dot.baseY * intensity * 4;
                 dot.vz += dot.baseZ * intensity * 4;
             } else if (variant === 1) {
-                // Vortex Twist
+                // Vortex
                 dot.vx += dot.baseY * intensity * 4;
                 dot.vy -= dot.baseX * intensity * 4;
                 dot.vz += dot.baseZ * intensity * 2;
@@ -303,7 +296,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
         const x2d = cx + dot.x * scale;
         const y2d = cy + dot.y * scale;
 
-        // Calculate color
+        // Color Calculation
         const speed = Math.sqrt(dot.vx*dot.vx + dot.vy*dot.vy);
         let r, g, b;
 
@@ -314,14 +307,13 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
            const intensity = Math.min(1, audioScale);
            r = 50; g = 220 + 35 * intensity; b = 255;
         } else {
-           // Idle - blueish purple, brightens with speed
+           // Idle
            const bright = Math.min(100, speed * 60);
            r = 110 + bright; 
            g = 110 + bright; 
            b = 245;
         }
 
-        // Soft alpha falloff
         const alpha = Math.min(1, (scale * 0.7) + (audioEnergy / 600) + 0.3);
         const radius = Math.max(0.1, dotRadius * scale);
 
@@ -334,10 +326,9 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
       animationId = requestAnimationFrame(animate);
     };
 
-    // Start Loop
     animationId = requestAnimationFrame(animate);
 
-    // --- Event Handlers ---
+    // Event Handlers
     const handleMouseMove = (e: MouseEvent) => {
        if (!canvas) return;
        const rect = canvas.getBoundingClientRect();
@@ -354,13 +345,10 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
        mouseRef.current.active = true;
     };
 
-    const handleInteractionEnd = () => {
-       // Optional: could fade out interaction
-    };
+    const handleInteractionEnd = () => { };
 
     const handleMouseDown = () => {
        mouseRef.current.isDown = true;
-       // Explosion Params
        const variant = Math.floor(Math.random() * 3); 
        const intensity = 3 + Math.random() * 5; 
        const dirX = (Math.random() - 0.5) * 2;
@@ -368,9 +356,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
        scatterRef.current = { active: true, intensity, variant, dirX, dirY };
     };
     
-    const handleMouseUp = () => {
-        mouseRef.current.isDown = false;
-    };
+    const handleMouseUp = () => { mouseRef.current.isDown = false; };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
@@ -393,10 +379,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
 
   return (
     <div ref={parentRef} className="w-full h-full absolute inset-0 overflow-hidden">
-      <canvas 
-        ref={canvasRef} 
-        className="block w-full h-full"
-      />
+      <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
 };

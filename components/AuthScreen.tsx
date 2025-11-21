@@ -1,5 +1,7 @@
+
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, Mail, Lock, Github, User } from 'lucide-react';
+import { ArrowRight, Mail, Lock } from 'lucide-react';
+import { AtlasLogo } from './AtlasLogo';
 
 interface AuthScreenProps {
   onLogin: (user: any) => void;
@@ -38,7 +40,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
       <div className="w-full max-w-md bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl shadow-2xl p-8 relative z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 mb-4 shadow-inner shadow-indigo-500/20 border border-indigo-500/20">
-             <Sparkles size={32} />
+             <AtlasLogo size={40} />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
             Welcome to Atlas

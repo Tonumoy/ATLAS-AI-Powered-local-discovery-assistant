@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Send, Menu, Loader2, Mic, MicOff, Volume2, VolumeX, Languages, X, Sparkles, Headphones, MessageSquare, Settings } from 'lucide-react';
+import { Send, Loader2, Mic, MicOff, Volume2, VolumeX, Languages, X, Headphones, MessageSquare, Settings, UserCircle } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { GroundingCard } from './components/GroundingCard';
 import { AuthScreen } from './components/AuthScreen';
 import { SettingsModal } from './components/SettingsModal';
 import { SphereAnimation } from './components/SphereAnimation';
+import { AtlasLogo } from './components/AtlasLogo';
 import { ChatSession, Message, Coordinates } from './types';
 import { generateResponse, generateTitle } from './services/geminiService';
 
@@ -103,9 +105,19 @@ function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
   }, [sessions]);
 
+  // Update language dynamically
   useEffect(() => {
     if (recognitionRef.current) {
       recognitionRef.current.lang = speechLang.code;
+      // Restart if currently listening to apply new language
+      if (isListening) {
+         recognitionRef.current.stop();
+         // Will auto-restart via onend if in voice mode, 
+         // but manual restart ensures cleaner state switch
+         setTimeout(() => {
+            if (viewMode === 'voice') startListening();
+         }, 200);
+      }
     }
   }, [speechLang]);
 
@@ -191,8 +203,14 @@ function App() {
 
     recognitionRef.current.onend = () => {
       setIsListening(false);
-      if (viewMode === 'voice' && input.trim().length > 0) {
-        handleSend();
+      if (viewMode === 'voice') {
+        if (input.trim().length > 0) {
+           handleSend();
+        } else if (!isLoading && !isSpeaking) {
+           // Auto-restart if we didn't catch anything and aren't busy
+           // This keeps the "Live" feel
+           setTimeout(() => startListening(), 1000);
+        }
       }
     };
 
@@ -221,7 +239,7 @@ function App() {
       setIsListening(false);
     };
 
-  }, [viewMode, input, vadSensitivity]);
+  }, [viewMode, input, vadSensitivity, isLoading, isSpeaking]);
 
   const speakText = (text: string) => {
     if (volume === 0 || !window.speechSynthesis) return;
@@ -235,10 +253,17 @@ function App() {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = speechLang.code;
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => 
-       (v.name.includes('Google') || v.name.includes('Natural')) && v.lang.startsWith(speechLang.code.split('-')[0])
-    ) || voices.find(v => v.lang === speechLang.code);
     
+    // Enhanced Voice Selection
+    // 1. Try exact match (e.g., bn-IN with "Google")
+    // 2. Try exact code match (bn-IN)
+    // 3. Try general lang match (bn)
+    const baseLang = speechLang.code.split('-')[0];
+    
+    let preferredVoice = voices.find(v => v.lang === speechLang.code && (v.name.includes('Google') || v.name.includes('Natural')));
+    if (!preferredVoice) preferredVoice = voices.find(v => v.lang === speechLang.code);
+    if (!preferredVoice) preferredVoice = voices.find(v => v.lang.startsWith(baseLang));
+
     if (preferredVoice) utterance.voice = preferredVoice;
     
     // Use configurable Speech Rate
@@ -271,9 +296,10 @@ function App() {
       sessionId = createNewSession();
       shouldGenerateTitle = true;
     } else {
-      // Check if existing session is empty (e.g. created via "Start Chatting" but never used)
+      // Check if existing session is empty or titled 'New Journey'
+      // Also check if title is strictly 'New Journey' to fix stuck titles
       const sess = sessions.find(s => s.id === sessionId);
-      if (sess && sess.messages.length === 0) {
+      if (sess && (sess.messages.length === 0 || sess.title === 'New Journey')) {
         shouldGenerateTitle = true;
       }
     }
@@ -356,6 +382,12 @@ function App() {
     return "Tap mic to speak";
   };
 
+  // Helper to get the last message with grounding chunks for Voice Mode overlay
+  const lastMessageWithCards = currentSession?.messages
+      .slice()
+      .reverse()
+      .find(m => m.role === 'model' && m.groundingChunks && m.groundingChunks.length > 0);
+
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans relative">
       
@@ -373,54 +405,68 @@ function App() {
         setSpeechRate={setSpeechRate}
       />
 
-      {/* Sidebar - Only visible in Chat Mode */}
-      <div className={`fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 md:relative ${viewMode === 'chat' ? (isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0') : '-translate-x-full hidden'}`}>
+      {/* Sidebar - Only visible in Chat Mode. Controlled via state on Mobile */}
+      {viewMode === 'chat' && (
         <Sidebar 
-          isOpen={true}
+          isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           sessions={sessions}
           currentSessionId={currentSessionId}
           onSelectSession={(id) => {
             setCurrentSessionId(id);
-            if(viewMode !== 'chat') setViewMode('chat');
+            // Don't need to set viewMode here as sidebar is only in chat
+            if (window.innerWidth < 768) setIsSidebarOpen(false);
           }}
           onNewChat={() => {
              createNewSession();
              setViewMode('chat');
+             if (window.innerWidth < 768) setIsSidebarOpen(false);
           }}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDeleteSession={deleteSession}
           user={user}
         />
-      </div>
+      )}
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-full relative w-full z-0">
         
-        {/* 3D Sphere Background - ALWAYS VISIBLE */}
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-auto">
-           <SphereAnimation isSpeaking={isSpeaking} isListening={isListening} />
-        </div>
+        {/* 3D Sphere Background - VISIBLE ONLY ON LANDING & VOICE */}
+        {(viewMode === 'landing' || viewMode === 'voice') && (
+           <div className="absolute inset-0 z-0 overflow-hidden pointer-events-auto">
+              <SphereAnimation isSpeaking={isSpeaking} isListening={isListening} />
+           </div>
+        )}
 
         {/* Header */}
-        <header className="h-16 flex items-center justify-between px-6 bg-slate-900/30 backdrop-blur-xl z-20 relative border-b border-slate-800/30">
+        <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-slate-900/30 backdrop-blur-xl z-20 relative border-b border-slate-800/30">
           <div className="flex items-center gap-4">
+            {/* Mobile Sidebar Toggle - NOW USER PROFILE ICON */}
             {viewMode === 'chat' && (
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden text-slate-400 hover:text-white">
-                <Menu size={24} />
+              <button 
+                onClick={() => setIsSidebarOpen(true)} 
+                className="md:hidden flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/30 overflow-hidden flex items-center justify-center">
+                   {user.avatar ? (
+                     <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                   ) : (
+                     <UserCircle size={20} className="text-indigo-400" />
+                   )}
+                </div>
               </button>
             )}
             
             {/* Back to Home button if not on landing */}
             {viewMode !== 'landing' && (
                <button onClick={() => handleModeSwitch('landing')} className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
-                 <Sparkles className="text-indigo-500" size={20} />
+                 <AtlasLogo size={24} />
                  <span className="font-bold text-lg hidden md:block">Atlas</span>
                </button>
             )}
             {viewMode === 'landing' && (
                <div className="flex items-center gap-2">
-                 <Sparkles className="text-indigo-500" size={20} />
+                 <AtlasLogo size={24} />
                  <span className="font-bold text-lg text-white">Atlas</span>
                </div>
             )}
@@ -481,7 +527,7 @@ function App() {
              {/* Settings (Visible in all modes now via header or Voice UI) */}
              {viewMode !== 'voice' && (
                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-400 hover:text-white">
-                   <Menu size={20} />
+                   <Settings size={20} />
                 </button>
              )}
 
@@ -510,11 +556,16 @@ function App() {
         {/* --- LANDING VIEW --- */}
         {viewMode === 'landing' && (
           <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 animate-in fade-in duration-700">
-             <div className="text-center space-y-6 max-w-2xl">
+             <div className="text-center space-y-6 max-w-2xl flex flex-col items-center">
+                {/* Added Central Logo */}
+                <div className="mb-2 animate-float">
+                    <AtlasLogo size={80} />
+                </div>
+
                 <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight drop-shadow-2xl">
                   Ask Atlas Anything.
                 </h1>
-                <p className="text-slate-300 text-xl font-light leading-relaxed max-w-lg mx-auto">
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 text-xl md:text-2xl font-medium leading-relaxed max-w-2xl mx-auto drop-shadow-sm">
                   Your personal guide to the physical world. Discover local gems, compare places, and chat naturally.
                 </p>
                 
@@ -546,31 +597,42 @@ function App() {
            <main className="flex-1 flex flex-col relative z-10 animate-in fade-in duration-500 h-full">
               
               {/* Center Content */}
-              <div className="flex-1 flex flex-col items-center justify-center z-10">
-                 <div className="text-center space-y-4 relative">
+              <div className="flex-1 flex flex-col items-center justify-center z-10 relative pb-40">
+                 <div className="text-center space-y-4 relative z-20 px-6">
                     <h2 className="text-3xl md:text-4xl font-bold text-white transition-all min-h-[3rem] drop-shadow-xl">
                        {getVoiceStatusText()}
                     </h2>
-                    <p className="text-slate-300 text-xl font-light min-h-[1.5rem] max-w-xl mx-auto px-4 text-center leading-relaxed">
+                    <p className="text-slate-300 text-xl font-light min-h-[1.5rem] max-w-xl mx-auto text-center leading-relaxed">
                        {input}
                     </p>
                  </div>
+
+                 {/* Visual Cards Overlay for Voice Mode */}
+                 {lastMessageWithCards && !isSpeaking && (
+                    <div className="absolute bottom-32 left-0 right-0 flex gap-4 overflow-x-auto px-6 pb-4 z-20 snap-x justify-center pointer-events-auto">
+                       {lastMessageWithCards.groundingChunks!.map((chunk, idx) => (
+                          <div key={idx} className="min-w-[280px] w-[280px] snap-center">
+                             <GroundingCard chunk={chunk} />
+                          </div>
+                       ))}
+                    </div>
+                 )}
               </div>
 
               {/* Bottom Mic Control - Pushed to very bottom */}
-              <div className="flex justify-center pb-12 md:pb-16">
+              <div className="absolute bottom-12 left-0 right-0 flex justify-center z-30 pointer-events-auto">
                 <button
                     onClick={isListening ? stopListening : startListening}
-                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl z-20 hover:scale-105 ${isListening ? 'bg-rose-500 text-white shadow-rose-500/40 animate-pulse' : 'bg-slate-800/80 backdrop-blur-md text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl hover:scale-105 ${isListening ? 'bg-rose-500 text-white shadow-rose-500/40 animate-pulse' : 'bg-slate-800/80 backdrop-blur-md text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'}`}
                 >
                     {isListening ? <MicOff size={32} /> : <Mic size={32} />}
                 </button>
               </div>
 
-              {/* Settings Trigger for Voice Mode (since top menu is minimal) */}
+              {/* Settings Trigger for Voice Mode */}
               <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="absolute bottom-12 right-8 p-3 bg-slate-900/50 backdrop-blur-md rounded-full text-slate-400 hover:text-white border border-slate-800 hover:bg-slate-800 transition-all"
+                className="absolute bottom-12 right-8 p-3 bg-slate-900/50 backdrop-blur-md rounded-full text-slate-400 hover:text-white border border-slate-800 hover:bg-slate-800 transition-all z-30"
               >
                  <Settings size={20} />
               </button>
