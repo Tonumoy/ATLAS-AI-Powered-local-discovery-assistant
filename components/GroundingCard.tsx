@@ -1,118 +1,172 @@
-
-import React from 'react';
-import { GroundingChunk } from '../types';
-import { MapPin, Star, Navigation, Quote, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { MapPin, Star, Navigation, Car, Calendar, Share2, Mail, Link as LinkIcon, MessageCircle } from 'lucide-react';
+import { GroundingChunk, Coordinates } from '../types';
 
 interface GroundingCardProps {
   chunk: GroundingChunk;
+  userLocation?: Coordinates | null;
 }
 
-export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk }) => {
+export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocation }) => {
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const shareMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(event.target as Node)) {
+        setIsShareMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!chunk.maps) return null;
 
-  const { title, uri, placeAnswerSources } = chunk.maps;
-  const { extractedMetadata } = chunk;
-  const review = placeAnswerSources?.reviewSnippets?.[0];
-  
-  // Calculate stars based on numeric rating
-  const ratingNum = extractedMetadata?.rating ? parseFloat(extractedMetadata.rating) : 0;
-  const stars = [];
-  for (let i = 1; i <= 5; i++) {
-     if (i <= ratingNum) stars.push('full');
-     else if (i - 0.5 <= ratingNum) stars.push('half');
-     else stars.push('empty');
-  }
+  const { title, googleMapsUri, rating, userReviewCount } = chunk.maps;
+  const metadata = chunk.extractedMetadata;
 
-  // Generate a deterministic gradient based on title length/chars
-  const seed = title ? title.length + title.charCodeAt(0) : 0;
-  const hues = [
-    'from-indigo-600 to-purple-600',
-    'from-emerald-600 to-teal-600',
-    'from-rose-600 to-orange-600',
-    'from-blue-600 to-cyan-600'
-  ];
-  const gradient = hues[seed % hues.length];
+  // Fallback values
+  const displayRating = metadata?.rating || rating || "N/A";
+  const displayReviews = metadata?.reviews || (userReviewCount ? `(${userReviewCount})` : "");
+  const displayDistance = metadata?.distance ? `${metadata.distance}km` : "Nearby";
+
+  // Robust Go Link: Prioritize API URI for accuracy, fallback to Search
+  const finalMapsLink = googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title || "")}`;
+
+  const handleShare = (platform: 'whatsapp' | 'email' | 'copy') => {
+    const text = `Check out ${title} on Atlas! ⭐ ${displayRating} • ${displayDistance}`;
+    const url = finalMapsLink;
+    const fullText = `${text}\n${url}`;
+
+    switch (platform) {
+      case 'whatsapp':
+        window.open(`https://wa.me/?text=${encodeURIComponent(fullText)}`, '_blank');
+        break;
+      case 'email':
+        window.open(`mailto:?subject=${encodeURIComponent(`Check out ${title}`)}&body=${encodeURIComponent(fullText)}`, '_blank');
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(fullText).then(() => alert("Copied to clipboard!"));
+        break;
+    }
+    setIsShareMenuOpen(false);
+  };
+
+  const handleRide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(`https://m.uber.com/ul/?action=setPickup&client_id=uber&pickup=my_location&dropoff[formatted_address]=${encodeURIComponent(title || "")}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleBook = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(`https://www.google.com/search?q=reserve+${encodeURIComponent(title || "")}`, '_blank', 'noopener,noreferrer');
+  };
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-700/50 hover:border-indigo-500/50 transition-all duration-300 mb-4 backdrop-blur-md shadow-lg">
-      
-      {/* Hero Image Section (Simulated) */}
-      <div className={`h-24 w-full bg-gradient-to-r ${gradient} relative overflow-hidden`}>
-         <div className="absolute inset-0 bg-black/20" />
-         <div className="absolute inset-0 flex items-center justify-center opacity-10">
-            <MapPin size={64} />
-         </div>
-         
-         {/* Extracted Rating Badge */}
-         {ratingNum > 0 && (
-            <div className="absolute bottom-2 left-3 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1.5 border border-white/10 shadow-lg">
-               <span className="text-amber-400 text-xs font-bold flex items-center gap-1">
-                  {ratingNum} <Star size={10} fill="currentColor" />
-               </span>
-               <span className="text-[10px] text-slate-400 border-l border-slate-600 pl-1.5">
-                  {extractedMetadata?.reviews}
-               </span>
-            </div>
-         )}
+    <div className="group relative overflow-visible rounded-2xl bg-[#18181b] border border-white/10 hover:border-white/20 transition-all duration-300 mb-4 shadow-xl hover:shadow-2xl hover:-translate-y-1 w-full max-w-sm">
 
-         {/* Distance Badge */}
-         {extractedMetadata?.distance && (
-            <div className="absolute bottom-2 right-3 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-bold text-white border border-white/10 shadow-lg">
-               {extractedMetadata.distance}km away
-            </div>
-         )}
-      </div>
+      {/* Gradient Header */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none" />
 
-      <div className="relative p-4">
-        <div className="flex justify-between items-start gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded">Verified</span>
-            </div>
-            
-            <h4 className="text-base font-bold text-white group-hover:text-indigo-200 transition-colors leading-tight">
-              {title}
-            </h4>
-            
-            {/* Fallback visual rating if extracted unavailable */}
-            {ratingNum === 0 && (
-               <div className="flex items-center gap-1 mt-1 opacity-50">
-                  <span className="text-xs text-slate-500">Rating details unavailable</span>
-               </div>
-            )}
-          </div>
-
-          <a 
-            href={uri} 
-            target="_blank" 
-            rel="noreferrer"
-            className="flex-shrink-0 flex items-center justify-center w-8 h-8 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"
-          >
-            <Navigation size={14} />
-          </a>
-        </div>
-
-        {review && (
-          <div className="mt-3 p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/30">
-            <div className="flex gap-2">
-              <Quote size={12} className="text-slate-500 flex-shrink-0 transform scale-x-[-1]" />
-              <p className="text-xs text-slate-300 italic leading-relaxed line-clamp-2">
-                "{review.content}"
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Footer Action */}
-      <a 
-        href={uri}
-        target="_blank" 
-        rel="noreferrer"
-        className="block w-full py-2 bg-slate-800/30 hover:bg-slate-800 text-center text-[10px] font-medium text-indigo-300 transition-colors border-t border-slate-800/50 uppercase tracking-wider"
+      <a
+        href={finalMapsLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block relative z-10"
       >
-        Open in Google Maps
+        <div className="relative p-4">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-full border border-indigo-500/20">
+              <MapPin size={12} />
+              {displayDistance}
+            </div>
+            <div className="flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2 py-1 rounded-full border border-amber-500/20">
+              <Star size={12} fill="currentColor" />
+              <span className="text-xs font-bold">{displayRating}</span>
+              <span className="text-[10px] opacity-70">{displayReviews}</span>
+            </div>
+          </div>
+
+          <h4 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors leading-tight mb-1">
+            {title}
+          </h4>
+        </div>
       </a>
+
+      {/* Action Buttons */}
+      <div className="relative z-10 grid grid-cols-4 border-t border-white/5 divide-x divide-white/5 bg-black/20 backdrop-blur-sm rounded-b-2xl">
+        <a
+          href={finalMapsLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          title="Directions"
+        >
+          <Navigation size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />
+          <span className="text-[10px] text-slate-500 font-medium">Go</span>
+        </a>
+
+        <button
+          onClick={handleRide}
+          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          title="Get a Ride"
+        >
+          <Car size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />
+          <span className="text-[10px] text-slate-500 font-medium">Ride</span>
+        </button>
+
+        <button
+          onClick={handleBook}
+          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          title="Book Table"
+        >
+          <Calendar size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />
+          <span className="text-[10px] text-slate-500 font-medium">Book</span>
+        </button>
+
+        <div className="relative" ref={shareMenuRef}>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsShareMenuOpen(!isShareMenuOpen);
+            }}
+            className={`flex flex-col items-center justify-center py-3 w-full transition-colors group/btn cursor-pointer ${isShareMenuOpen ? 'bg-white/10 text-indigo-400' : 'hover:bg-white/5'}`}
+            title="Share"
+          >
+            <Share2 size={16} className={`${isShareMenuOpen ? 'text-indigo-400' : 'text-slate-400'} group-hover/btn:text-indigo-400 mb-1`} />
+            <span className={`text-[10px] font-medium ${isShareMenuOpen ? 'text-indigo-400' : 'text-slate-500'}`}>Share</span>
+          </button>
+
+          {/* Share Menu Dropdown */}
+          {isShareMenuOpen && (
+            <div className="absolute bottom-full right-0 mb-2 w-32 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <button
+                onClick={() => handleShare('whatsapp')}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-zinc-300 hover:bg-white/10 hover:text-green-400 transition-colors text-left"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </button>
+              <button
+                onClick={() => handleShare('email')}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-zinc-300 hover:bg-white/10 hover:text-blue-400 transition-colors text-left"
+              >
+                <Mail size={14} /> Email
+              </button>
+              <div className="h-px bg-white/5" />
+              <button
+                onClick={() => handleShare('copy')}
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-zinc-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+              >
+                <LinkIcon size={14} /> Copy Link
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,14 +1,17 @@
 
 export interface GroundingChunk {
   maps?: {
+    googleMapsUri?: string;
     uri?: string;
     title?: string;
     placeId?: string;
+    rating?: number | string;
+    userReviewCount?: number;
     placeAnswerSources?: {
-        reviewSnippets?: {
-            content?: string;
-            author?: string;
-        }[]
+      reviewSnippets?: {
+        content?: string;
+        author?: string;
+      }[]
     }
   };
   web?: {
@@ -36,6 +39,7 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   updatedAt: number;
+  messages_count?: number; // Optional helper
 }
 
 export interface Coordinates {

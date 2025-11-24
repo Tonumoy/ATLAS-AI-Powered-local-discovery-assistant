@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatSession } from '../types';
-import { MessageSquare, Plus, X, Settings, UserCircle, LogOut, HelpCircle, ChevronRight, MoreHorizontal, Trash2 } from 'lucide-react';
+import { MessageSquare, Plus, X, Settings, LogOut, HelpCircle, Trash2, MoreHorizontal, Sparkles } from 'lucide-react';
 import { AtlasLogo } from './AtlasLogo';
 
 interface SidebarProps {
@@ -17,11 +16,11 @@ interface SidebarProps {
   user: any;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ 
-  isOpen, 
-  onClose, 
-  sessions, 
-  currentSessionId, 
+export const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  onClose,
+  sessions,
+  currentSessionId,
   onSelectSession,
   onNewChat,
   onOpenSettings,
@@ -46,142 +45,147 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Mobile Overlay */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm animate-in fade-in duration-300"
-          onClick={onClose}
-        />
-      )}
+      <div
+        className={`fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
 
       {/* Sidebar Container */}
       <aside className={`
-        fixed top-0 left-0 h-full w-[280px] bg-[#0f1117] border-r border-slate-800/50 
-        transform transition-transform duration-300 ease-out z-50 shadow-2xl md:shadow-none
-        md:translate-x-0 md:relative flex flex-col
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        fixed inset-y-0 left-0 w-[280px] bg-[#090a0d] border-r border-white/5 
+        transform transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] z-50 
+        md:static flex flex-col h-full max-h-screen min-h-0 overflow-hidden
+        ${isOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full md:translate-x-0 md:w-0 md:border-none'}
       `}>
-        
-        {/* Header: Brand & Close */}
-        <div className="flex items-center justify-between p-4 md:hidden">
-           <div className="flex items-center gap-2 text-indigo-400">
-              <AtlasLogo size={24} />
-              <span className="font-bold text-white tracking-tight">Atlas</span>
-           </div>
-           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800/50 rounded-lg">
-             <X size={18} />
-           </button>
+
+        {/* Header: Brand (Mobile Only) */}
+        <div className="flex items-center justify-between p-4 md:hidden flex-shrink-0">
+          <div className="flex items-center gap-2 text-white">
+            <AtlasLogo size={24} />
+            <span className="font-medium tracking-tight">Atlas</span>
+          </div>
+          <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
         {/* Primary Action: New Chat */}
-        <div className="px-3 py-3">
+        <div className="px-3 py-3 md:pt-5 min-w-[280px] flex-shrink-0">
           <button
             onClick={() => {
               onNewChat();
               if (window.innerWidth < 768) onClose();
             }}
-            className="flex items-center justify-between w-full px-3 py-2.5 bg-slate-800/40 hover:bg-slate-800 text-white rounded-xl transition-all border border-slate-700/50 hover:border-slate-600 group"
+            className="group flex items-center justify-between w-full px-3 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all border border-white/5 hover:border-white/10 shadow-sm"
           >
             <div className="flex items-center gap-3">
-               <div className="bg-indigo-600 p-1.5 rounded-lg group-hover:bg-indigo-500 transition-colors">
-                  <Plus size={16} className="text-white" />
-               </div>
-               <span className="text-sm font-medium">New Chat</span>
+              <div className="bg-white/10 p-1 rounded-md group-hover:bg-white/20 transition-colors">
+                <Plus size={16} className="text-white" />
+              </div>
+              <span className="text-sm font-medium">New chat</span>
             </div>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-               <MessageSquare size={14} className="text-slate-500" />
-            </div>
+            <MessageSquare size={16} className="text-zinc-500 group-hover:text-zinc-400 transition-colors" />
           </button>
         </div>
 
         {/* Scrollable History */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-6 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent min-w-[280px]">
           {sessions.length === 0 ? (
-             <div className="text-center mt-10">
-                <p className="text-xs text-slate-600 font-medium">No chat history</p>
-             </div>
+            <div className="flex flex-col items-center justify-center h-40 text-center px-4 opacity-50">
+              <Sparkles size={24} className="text-zinc-600 mb-2" />
+              <p className="text-xs text-zinc-500 font-medium">Start a new journey</p>
+            </div>
           ) : (
-            <div className="space-y-1">
-               <h3 className="px-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Recent</h3>
-               {sessions.map((session) => (
-                <div key={session.id} className="group relative">
+            <>
+              <div className="px-3 py-2">
+                <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Recent</h3>
+              </div>
+              {sessions.map((session) => (
+                <div key={session.id} className="group relative px-1">
                   <button
                     onClick={() => {
                       onSelectSession(session.id);
                       if (window.innerWidth < 768) onClose();
                     }}
                     className={`
-                      w-full text-left pl-3 pr-9 py-2.5 rounded-lg text-[13px] flex items-center gap-3 transition-all
-                      ${currentSessionId === session.id 
-                        ? 'bg-slate-800 text-white font-medium' 
-                        : 'text-slate-400 hover:bg-slate-800/30 hover:text-slate-200'}
+                      w-full text-left pl-3 pr-8 py-2 rounded-lg text-[13px] flex items-center gap-3 transition-all
+                      ${currentSessionId === session.id
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}
                     `}
                   >
                     <span className="truncate">{session.title}</span>
                   </button>
-                  
+
                   {/* Hover Delete Action */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteSession(session.id);
-                    }}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-700 rounded-md opacity-0 group-hover:opacity-100 transition-all z-10"
-                    title="Delete chat"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <div className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center ${currentSessionId === session.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteSession(session.id);
+                      }}
+                      className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
+                      title="Delete chat"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
-            </div>
+            </>
           )}
         </div>
 
-        {/* Footer: User Profile (Claude/GPT Style) */}
-        <div className="p-3 border-t border-slate-800/50 relative" ref={profileMenuRef}>
-          
+        {/* Footer: User Profile */}
+        <div className="p-3 border-t border-white/5 relative min-w-[280px] flex-shrink-0" ref={profileMenuRef}>
+
           {/* Popover Menu */}
-          {isProfileMenuOpen && (
-            <div className="absolute bottom-full left-3 right-3 mb-2 bg-[#1c1f26] border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-2 zoom-in-95 duration-200 z-50">
-               <div className="p-1">
-                  <button 
-                    onClick={() => { onOpenSettings(); setIsProfileMenuOpen(false); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white rounded-lg transition-colors"
-                  >
-                     <Settings size={16} /> Settings
-                  </button>
-                  <button 
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white rounded-lg transition-colors"
-                  >
-                     <HelpCircle size={16} /> Help & FAQ
-                  </button>
-                  <div className="h-px bg-slate-700/50 my-1 mx-2" />
-                  <button 
-                    onClick={onLogout}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                  >
-                     <LogOut size={16} /> Log out
-                  </button>
-               </div>
+          <div className={`
+            absolute bottom-full left-2 right-2 mb-2 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 origin-bottom z-50
+            ${isProfileMenuOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2 pointer-events-none'}
+          `}>
+            <div className="p-1.5 space-y-0.5">
+              <div className="px-3 py-2 text-xs text-zinc-500 font-medium border-b border-white/5 mb-1">
+                {user?.email}
+              </div>
+              <button
+                onClick={() => { onOpenSettings(); setIsProfileMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
+              >
+                <Settings size={15} /> Settings
+              </button>
+              <button
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-white/10 hover:text-white rounded-lg transition-colors"
+              >
+                <HelpCircle size={15} /> Help & Support
+              </button>
+              <div className="h-px bg-white/5 my-1" />
+              <button
+                onClick={onLogout}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+              >
+                <LogOut size={15} /> Log out
+              </button>
             </div>
-          )}
+          </div>
 
           {/* User Trigger */}
-          <button 
+          <button
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-            className={`flex items-center gap-3 w-full px-3 py-3 rounded-xl transition-all ${isProfileMenuOpen ? 'bg-slate-800' : 'hover:bg-slate-800/50'}`}
+            className={`flex items-center gap-3 w-full px-2 py-2 rounded-xl transition-all group ${isProfileMenuOpen ? 'bg-white/10' : 'hover:bg-white/5'}`}
           >
-            <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center overflow-hidden border border-indigo-500/30">
-               {user?.avatar ? (
-                 <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
-               ) : (
-                 <UserCircle size={20} className="text-indigo-400" />
-               )}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-inner">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="User" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                user?.name?.charAt(0).toUpperCase() || "A"
+              )}
             </div>
             <div className="flex-1 text-left overflow-hidden">
-              <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-500 truncate">Free Plan</p>
+              <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+              <p className="text-[10px] text-zinc-500 truncate">Free Plan</p>
             </div>
-            <MoreHorizontal size={16} className="text-slate-500" />
+            <MoreHorizontal size={16} className="text-zinc-500 group-hover:text-zinc-300 transition-colors" />
           </button>
         </div>
       </aside>
