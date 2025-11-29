@@ -291,7 +291,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isAllowed = origin && (allowedOrigins.includes(origin) || isVercelDeployment);
 
     if (!isAllowed && process.env.NODE_ENV === 'production') {
-        return res.status(403).json({ error: 'Forbidden: Unauthorized Origin' });
+        console.error(`Blocked Origin: ${origin}`);
+        return res.status(403).json({ error: `Forbidden: Unauthorized Origin (${origin})` });
     }
 
     if (req.method === 'OPTIONS') {

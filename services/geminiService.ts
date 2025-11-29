@@ -39,7 +39,11 @@ export const generateResponse = async (
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      if (response.status === 404) {
+        throw new Error("404 Not Found: The server endpoint could not be reached. This is likely a deployment routing issue.");
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API Error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -121,7 +125,7 @@ export const generateResponse = async (
 
   } catch (error: any) {
     console.error("API Service Error:", error);
-    return { text: "I'm having a momentary lapse in connection. Give me a sec and try again?" };
+    return { text: `Connection Error: ${error.message || "Unknown error"}. Please check your network or API key.` };
   }
 };
 
