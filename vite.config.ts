@@ -8,8 +8,11 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), basicSsl()],
     server: {
-      host: true, // Expose to network
-      port: 3000
+      host: true,
+      port: 3000,
+      proxy: {
+        '/api': 'http://localhost:3001'
+      }
     }
   };
 });

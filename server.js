@@ -1,19 +1,23 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI, Content, Part } from "@google/genai";
+import express from 'express';
+import cors from 'cors';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-// Types (replicated here to avoid importing from client-side files if not shared)
-interface Message {
-    role: 'user' | 'model';
-    text: string;
-    isError?: boolean;
-}
+// Load environment variables from .env.local
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '.env.local') });
 
-interface Coordinates {
-    latitude: number;
-    longitude: number;
-}
+const app = express();
+const PORT = 3001;
 
-// Enhanced System Instruction (Copied from geminiService.ts)
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Atlas System Instruction
 const SYSTEM_INSTRUCTION = `
 You are "Atlas" - a sophisticated AI-powered local discovery assistant with deep expertise in location intelligence, user sentiment analysis, and conversational recommendation systems.
 
@@ -269,45 +273,18 @@ Be confident. Be concise. Be genuinely helpful.
 When in doubt: **Less talk, more action.** Find the place, format it cleanly, send them on their way.
 `;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
+// Health endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
-    // Security: Origin Check
-    const origin = req.headers.origin;
-    const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:5173', // Vite default
-        // Add your production domain dynamically or allow all vercel.app subdomains for now
-    ];
-
-    const isVercelDeployment = origin && origin.endsWith('.vercel.app');
-    const isAllowed = origin && (allowedOrigins.includes(origin) || isVercelDeployment);
-
-    if (!isAllowed && process.env.NODE_ENV === 'production') {
-        console.error(`Blocked Origin: ${origin}`);
-        return res.status(403).json({ error: `Forbidden: Unauthorized Origin (${origin})` });
-    }
-
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
-
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-
+// Chat endpoint
+app.post('/api/chat', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
-        console.error("GEMINI_API_KEY is missing in server environment.");
-        return res.status(500).json({ error: "Server configuration error: API Key missing" });
+        console.error("GEMINI_API_KEY is missing in environment.");
+        return res.status(500).json({ error: "Server configuration error: API Key missing. Check .env.local file." });
     }
 
     const { history, prompt, location, language, userProfile, mode } = req.body;
@@ -325,15 +302,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }],
             });
             const title = response.text ? response.text.trim() : "New Journey";
-            return res.status(200).json({ title });
+            return res.json({ title });
         }
 
         // Mode: Chat Response (Default)
-        const contents: Content[] = (history || [])
-            .filter((msg: Message) => !msg.isError)
-            .map((msg: Message) => ({
+        const contents = (history || [])
+            .filter((msg) => !msg.isError)
+            .map((msg) => ({
                 role: msg.role,
-                parts: [{ text: msg.text }] as Part[],
+                parts: [{ text: msg.text }],
             }));
 
         contents.push({
@@ -350,7 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     - **User Profile/Preferences:** ${userProfile || "None yet. Learn their preferences as you chat."}
     `;
 
-        const config: any = {
+        const config = {
             systemInstruction: activeSystemInstruction,
             tools: [{ googleMaps: {} }],
         };
@@ -375,10 +352,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const text = response.text || "I found the place, but the connection is a bit fuzzy. Mind asking that one more time?";
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
-        return res.status(200).json({ text, groundingChunks });
+        return res.json({ text, groundingChunks });
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Gemini API Error:", error);
         return res.status(500).json({ error: error.message || "Internal Server Error" });
     }
-}
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`\n🌍 Atlas server running on http://localhost:${PORT}`);
+    console.log(`   Health check: http://localhost:${PORT}/api/health`);
+    console.log(`   Chat API: http://localhost:${PORT}/api/chat (POST)\n`);
+});

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Analytics } from '@vercel/analytics/react';
 import { v4 as uuidv4 } from 'uuid';
 import { Send, Mic, MicOff, Volume2, VolumeX, Languages, X, MessageSquare, Menu, ChevronDown, Layout, Headphones, Sparkles, MapPin, ArrowUp } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
@@ -436,6 +435,17 @@ function App() {
               </div>
             )}
 
+            {/* Location Status Indicator */}
+            <div
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+              title={location ? `Location: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : "Location not available - enable GPS for nearby recommendations"}
+            >
+              <MapPin size={14} className={location ? "text-emerald-400" : "text-amber-400"} />
+              <span className={`text-xs ${location ? "text-emerald-400" : "text-amber-400"}`}>
+                {location ? "5km" : "No GPS"}
+              </span>
+            </div>
+
             {/* Language Selector */}
             <div className="relative">
               <button
@@ -611,7 +621,6 @@ function App() {
           </main>
         )}
       </div>
-      <Analytics />
     </div>
   );
 }
