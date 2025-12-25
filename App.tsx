@@ -44,6 +44,8 @@ function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [location, setLocation] = useState<Coordinates | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error' | 'unsupported'>('idle');
+  const [showLocationHelp, setShowLocationHelp] = useState(false);
 
   // Voice & Call Mode State
   const [isListening, setIsListening] = useState(false);
@@ -61,6 +63,14 @@ function App() {
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<any>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+
+  // Voice mode refs to avoid stale closures
+  const inputRef = useRef<string>('');
+  const isListeningRef = useRef<boolean>(false);
+  const wantToListenRef = useRef<boolean>(false); // Tracks user intent to listen
+  const viewModeRef = useRef<ViewMode>('landing');
+  const isSpeakingRef = useRef<boolean>(false);
+  const isLoadingRef = useRef<boolean>(false);
 
   // --- Initialization ---
 
@@ -81,19 +91,44 @@ function App() {
 
     if (window.innerWidth < 768) setIsSidebarOpen(false);
 
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
-        () => { console.log("Geolocation permission denied or error."); }
-      );
-    }
+    // Request geolocation with retry logic
+    const requestLocation = () => {
+      if ("geolocation" in navigator) {
+        setLocationStatus('requesting');
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+            setLocationStatus('granted');
+            console.log('GPS: Location obtained');
+          },
+          (error) => {
+            console.log("Geolocation error:", error.message);
+            if (error.code === 1) {
+              setLocationStatus('denied');
+            } else if (error.code === 2) {
+              setLocationStatus('unavailable');
+            } else {
+              setLocationStatus('error');
+            }
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      } else {
+        setLocationStatus('unsupported');
+      }
+    };
+
+    requestLocation();
 
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;  // Keep listening until user stops
       recognition.interimResults = true;
       recognition.lang = speechLang.code;
       recognitionRef.current = recognition;
+      console.log('Speech recognition initialized');
+    } else {
+      console.log('Speech recognition not supported');
     }
   }, []);
 
@@ -106,9 +141,12 @@ function App() {
   useEffect(() => {
     if (recognitionRef.current) {
       recognitionRef.current.lang = speechLang.code;
-      if (isListening) {
-        recognitionRef.current.stop();
-        setTimeout(() => { if (viewMode === 'voice') startListening(); }, 200);
+      // If currently listening, restart with new language
+      if (isListeningRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) { }
+        // Restart will happen automatically via onend handler
       }
     }
   }, [speechLang]);
@@ -158,6 +196,8 @@ function App() {
   }, []);
 
   const deleteSession = (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this journey?")) return;
+
     const newSessions = sessions.filter(s => s.id !== id);
     setSessions(newSessions);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newSessions));
@@ -167,66 +207,188 @@ function App() {
     }
   };
 
-  const startListening = () => {
-    if (!recognitionRef.current) return;
-    try {
-      if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-      }
-      recognitionRef.current.start();
-      setIsListening(true);
-    } catch (e) { setIsListening(true); }
-  };
-
-  const stopListening = () => {
-    if (!recognitionRef.current) return;
-    try { recognitionRef.current.stop(); } catch (e) { }
-    setIsListening(false);
-  };
+  // Keep refs in sync with state
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
 
   useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  // ============ VOICE MODE - COMPLETE REWRITE ============
+
+  // Start listening - user taps mic
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) {
+      console.log('No speech recognition');
+      alert('Speech recognition not supported in this browser');
+      return;
+    }
+    if (isListeningRef.current) return;
+
+    // Cancel speech if playing
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+
+    // Start fresh
+    wantToListenRef.current = true;
+    setInput('');
+    inputRef.current = '';
+
+    try {
+      recognitionRef.current.start();
+      isListeningRef.current = true;
+      setIsListening(true);
+      console.log('Started listening');
+    } catch (e: any) {
+      console.log('Start error:', e.message);
+      if (e.name === 'InvalidStateError') {
+        // Already running
+        isListeningRef.current = true;
+        setIsListening(true);
+      }
+    }
+  }, []);
+
+  // Stop listening and send - user taps mic again
+  const stopListeningAndSend = useCallback(() => {
     if (!recognitionRef.current) return;
 
-    recognitionRef.current.onstart = () => {
+    wantToListenRef.current = false;
+
+    try {
+      recognitionRef.current.stop();
+    } catch (e) { }
+
+    isListeningRef.current = false;
+    setIsListening(false);
+
+    // Get the input and send it
+    const textToSend = inputRef.current.trim();
+    console.log('Stopping, text to send:', textToSend);
+
+    if (textToSend.length > 0) {
+      // Use a slight delay then trigger send
+      setTimeout(() => {
+        // Manually trigger the send
+        const event = new CustomEvent('voice-send-message', { detail: { text: textToSend } });
+        document.dispatchEvent(event);
+      }, 50);
+    }
+  }, []);
+
+  // Stop without sending (for mode switch)
+  const stopListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    wantToListenRef.current = false;
+    try {
+      recognitionRef.current.stop();
+    } catch (e) { }
+    isListeningRef.current = false;
+    setIsListening(false);
+  }, []);
+
+  // Recognition event handlers
+  useEffect(() => {
+    if (!recognitionRef.current) return;
+    const recognition = recognitionRef.current;
+
+    recognition.onstart = () => {
+      console.log('Recognition started');
+      isListeningRef.current = true;
       setIsListening(true);
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-      }
-      if (viewMode === 'voice') setInput('');
     };
 
-    recognitionRef.current.onend = () => {
+    recognition.onend = () => {
+      console.log('Recognition ended, wantToListen:', wantToListenRef.current);
+      const wasListening = isListeningRef.current;
+      isListeningRef.current = false;
       setIsListening(false);
-      if (viewMode === 'voice') {
-        if (input.trim().length > 0) {
-          handleSend();
-        } else if (!isLoading && !isSpeaking) {
-          setTimeout(() => startListening(), 1000);
+
+      // Auto-restart if user still wants to listen (browser timeout protection)
+      if (wantToListenRef.current && viewModeRef.current === 'voice' && !isSpeakingRef.current && !isLoadingRef.current) {
+        setTimeout(() => {
+          if (wantToListenRef.current && !isListeningRef.current) {
+            try {
+              recognition.start();
+              isListeningRef.current = true;
+              setIsListening(true);
+              console.log('Auto-restarted');
+            } catch (e) {
+              console.log('Auto-restart failed');
+            }
+          }
+        }, 200);
+      }
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = 0; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
         }
       }
+
+      const fullTranscript = finalTranscript || interimTranscript;
+      setInput(fullTranscript);
+      inputRef.current = fullTranscript;
     };
 
-    recognitionRef.current.onresult = (event: any) => {
-      let transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
+    recognition.onerror = (event: any) => {
+      console.log('Recognition error:', event.error);
+
+      if (event.error === 'no-speech') {
+        // Normal - browser will restart via onend
+        return;
       }
-      setInput(transcript);
-      if (viewMode === 'voice') {
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => {
-          if (recognitionRef.current) recognitionRef.current.stop();
-        }, vadSensitivity);
+
+      if (event.error === 'aborted' || event.error === 'not-allowed') {
+        wantToListenRef.current = false;
+        isListeningRef.current = false;
+        setIsListening(false);
       }
     };
 
-    recognitionRef.current.onerror = (event: any) => {
-      setIsListening(false);
+    return () => { };
+  }, []);
+
+  // Handle voice send message event
+  useEffect(() => {
+    const handleVoiceSendMessage = (e: CustomEvent) => {
+      const text = e.detail?.text;
+      console.log('Voice send message received:', text);
+
+      if (text && text.trim().length > 0 && !isLoadingRef.current) {
+        // Set the input and trigger send
+        setInput(text);
+        inputRef.current = text;
+
+        // Wait for state to update then send
+        setTimeout(() => {
+          handleSend();
+        }, 50);
+      }
     };
 
-  }, [viewMode, input, vadSensitivity, isLoading, isSpeaking]);
+    document.addEventListener('voice-send-message', handleVoiceSendMessage as EventListener);
+    return () => document.removeEventListener('voice-send-message', handleVoiceSendMessage as EventListener);
+  }, []);
+
+  // ============ END VOICE MODE ============
 
   const speakText = (text: string) => {
     if (volume === 0 || !window.speechSynthesis) return;
@@ -251,7 +413,7 @@ function App() {
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => {
       setIsSpeaking(false);
-      if (viewMode === 'voice') setTimeout(() => startListening(), 500);
+      // WhatsApp style: Don't auto-start listening, user must tap mic
     };
     utterance.onerror = () => setIsSpeaking(false);
 
@@ -259,7 +421,9 @@ function App() {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    // Check both state and ref (ref is more up-to-date for voice mode)
+    const textToSend = input.trim() || inputRef.current.trim();
+    if (!textToSend || isLoading) return;
     if (isListening) stopListening();
 
     let sessionId = currentSessionId;
@@ -273,8 +437,9 @@ function App() {
       if (sess && (sess.messages.length === 0 || sess.title === 'New Journey')) shouldGenerateTitle = true;
     }
 
-    const userText = input;
+    const userText = textToSend;
     setInput('');
+    inputRef.current = ''; // Clear the ref too
     setIsLoading(true);
     if (viewMode === 'landing') setViewMode('chat');
 
@@ -330,7 +495,7 @@ function App() {
     setIsSpeaking(false);
     setViewMode(mode);
     setIsModeMenuOpen(false);
-    if (mode === 'voice') setTimeout(() => startListening(), 500);
+    // WhatsApp style: Don't auto-start, user taps mic to begin
   };
 
   if (!user) return <AuthScreen onLogin={handleLogin} />;
@@ -353,6 +518,67 @@ function App() {
         speechRate={speechRate}
         setSpeechRate={setSpeechRate}
       />
+
+      {/* --- LOCATION HELP MODAL --- */}
+      {showLocationHelp && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#1a1a1f] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <MapPin className="text-indigo-400" size={24} />
+                Enable Location
+              </h2>
+              <button onClick={() => setShowLocationHelp(false)} className="text-slate-400 hover:text-white p-1">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-slate-300 mb-4">
+              Atlas needs your location to find nearby places. Since permission was blocked, you'll need to enable it in your browser settings:
+            </p>
+
+            <div className="space-y-3 text-sm">
+              <div className="bg-white/5 rounded-xl p-4">
+                <h3 className="font-medium text-white mb-2">📱 On Mobile (Chrome/Safari):</h3>
+                <ol className="text-slate-400 space-y-1 list-decimal list-inside">
+                  <li>Tap the <span className="text-white">🔒 lock icon</span> in address bar</li>
+                  <li>Tap <span className="text-white">"Site settings"</span> or <span className="text-white">"Permissions"</span></li>
+                  <li>Set <span className="text-white">Location</span> to <span className="text-emerald-400">"Allow"</span></li>
+                  <li>Refresh the page</li>
+                </ol>
+              </div>
+
+              <div className="bg-white/5 rounded-xl p-4">
+                <h3 className="font-medium text-white mb-2">💻 On Desktop:</h3>
+                <ol className="text-slate-400 space-y-1 list-decimal list-inside">
+                  <li>Click the <span className="text-white">🔒 lock icon</span> in address bar</li>
+                  <li>Find <span className="text-white">"Location"</span> setting</li>
+                  <li>Change to <span className="text-emerald-400">"Allow"</span></li>
+                  <li>Refresh the page</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowLocationHelp(false);
+                  window.location.reload();
+                }}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium transition-colors"
+              >
+                Refresh Page
+              </button>
+              <button
+                onClick={() => setShowLocationHelp(false)}
+                className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- SIDEBAR --- */}
       <Sidebar
@@ -435,16 +661,62 @@ function App() {
               </div>
             )}
 
-            {/* Location Status Indicator */}
-            <div
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
-              title={location ? `Location: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : "Location not available - enable GPS for nearby recommendations"}
+            {/* Location Status Indicator - Clickable to retry */}
+            <button
+              onClick={() => {
+                if (locationStatus === 'denied') {
+                  // Show help modal for blocked permissions
+                  setShowLocationHelp(true);
+                } else if (!location) {
+                  // Request location again
+                  if ("geolocation" in navigator) {
+                    setLocationStatus('requesting');
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        setLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+                        setLocationStatus('granted');
+                      },
+                      (error) => {
+                        if (error.code === 1) {
+                          setLocationStatus('denied');
+                          setShowLocationHelp(true); // Show help when user denies
+                        }
+                        else if (error.code === 2) setLocationStatus('unavailable');
+                        else setLocationStatus('error');
+                      },
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                    );
+                  }
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors ${!location ? 'hover:bg-white/10 cursor-pointer' : 'cursor-default'}`}
+              title={
+                location
+                  ? `Location: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
+                  : locationStatus === 'denied'
+                    ? "Location blocked - tap for help enabling it"
+                    : locationStatus === 'requesting'
+                      ? "Requesting location..."
+                      : "Tap to enable GPS"
+              }
             >
-              <MapPin size={14} className={location ? "text-emerald-400" : "text-amber-400"} />
-              <span className={`text-xs ${location ? "text-emerald-400" : "text-amber-400"}`}>
-                {location ? "5km" : "No GPS"}
+              <MapPin size={14} className={
+                location ? "text-emerald-400" :
+                  locationStatus === 'requesting' ? "text-blue-400 animate-pulse" :
+                    locationStatus === 'denied' ? "text-red-400" :
+                      "text-amber-400"
+              } />
+              <span className={`text-xs ${location ? "text-emerald-400" :
+                locationStatus === 'requesting' ? "text-blue-400" :
+                  locationStatus === 'denied' ? "text-red-400" :
+                    "text-amber-400"
+                }`}>
+                {location ? "5km" :
+                  locationStatus === 'requesting' ? "..." :
+                    locationStatus === 'denied' ? "Blocked" :
+                      "No GPS"}
               </span>
-            </div>
+            </button>
 
             {/* Language Selector */}
             <div className="relative">
@@ -550,7 +822,15 @@ function App() {
             {/* Voice Controls */}
             <div className="absolute bottom-12 left-0 right-0 flex justify-center z-30 gap-6 items-center">
               <button
-                onClick={isListening ? stopListening : startListening}
+                onClick={() => {
+                  if (isListening) {
+                    // User taps again to stop and send (WhatsApp style)
+                    stopListeningAndSend();
+                  } else {
+                    // User taps to start listening
+                    startListening();
+                  }
+                }}
                 className={`w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-2xl hover:scale-105 ${isListening ? 'bg-rose-500 text-white shadow-rose-500/40' : 'bg-white text-black hover:bg-indigo-50'}`}
               >
                 {isListening ? <MicOff size={28} /> : <Mic size={28} />}
