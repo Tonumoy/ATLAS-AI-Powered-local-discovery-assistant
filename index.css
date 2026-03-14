@@ -1,8 +1,21 @@
-/* Global Scrollbar Styling */
+/* ============================================
+   Atlas — Global Styles
+   ============================================ */
+
+/* Base */
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: #0f1117;
+  color: #e2e8f0;
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
 
 /* Webkit (Chrome, Edge, Safari) */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -10,20 +23,87 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ffffff;
-  /* White thumb */
-  border-radius: 4px;
-  border: 2px solid #0f1117;
-  /* Creates a padding effect around the thumb */
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #e2e8f0;
-  /* Slight dim on hover */
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ffffff transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+/* ============================================
+   Utility: Hide Scrollbar
+   ============================================ */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+
+/* Shimmer / Skeleton loading */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Subtle glow pulse */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.animate-glow {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Feedback flash */
+@keyframes feedback-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.animate-feedback-pop {
+  animation: feedback-pop 0.3s ease-out;
 }

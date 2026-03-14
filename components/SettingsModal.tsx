@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, User, Settings, Shield, LogOut, Globe, Languages, Mic, CreditCard, Waves, Volume2, MapPin, Zap } from 'lucide-react';
+import { AtlasLogo } from './AtlasLogo';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -101,6 +102,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button className="text-xs bg-white text-black hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors font-medium">Upgrade</button>
                 </div>
               </div>
+
+              <button
+                onClick={onLogout}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors font-medium border border-rose-500/20"
+              >
+                <LogOut size={16} /> Log out
+              </button>
             </div>
           )}
 
@@ -125,6 +133,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onChange={(e) => setVadSensitivity(Number(e.target.value))}
                       className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                     />
+                    <p className="text-[11px] text-zinc-500 mt-1">How long to wait after you stop speaking before sending</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Speech Rate Slider */}
+              <div>
+                <h3 className="text-md font-bold text-white mb-4 flex items-center gap-2">
+                  <Volume2 size={18} className="text-indigo-400" /> Speech Output
+                </h3>
+                <div className="bg-white/5 rounded-xl p-5 border border-white/5 space-y-6">
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <label className="text-sm font-medium text-zinc-300">Speaking Speed</label>
+                      <span className="text-xs text-indigo-400 font-bold">{speechRate.toFixed(2)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.05"
+                      value={speechRate}
+                      onChange={(e) => setSpeechRate(Number(e.target.value))}
+                      className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
+                      <span>Slow</span>
+                      <span>Normal</span>
+                      <span>Fast</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -161,15 +199,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'about' && (
             <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
               <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-white mb-1">About Atlas</h3>
-                <p className="text-zinc-400 text-sm">Your local guide engine.</p>
+                <div className="inline-flex items-center justify-center mb-3">
+                  <AtlasLogo size={32} className="text-indigo-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-1">Atlas 2.0</h3>
+                <p className="text-zinc-400 text-sm">AI-Powered Local Discovery Assistant</p>
               </div>
 
               <div className="bg-indigo-500/10 rounded-xl p-4 border border-indigo-500/20">
                 <p className="text-sm text-indigo-200 leading-relaxed">
-                  Atlas is an advanced AI assistant optimized for local discovery. It uses geolocation context to find the best places near you.
+                  Atlas uses Gemini 2.5 Flash with Google Maps integration to find the best places near you through natural conversation and voice interaction.
                 </p>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                  <div className="text-lg font-bold text-white">5km</div>
+                  <div className="text-[10px] text-zinc-500 font-medium">Search Radius</div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                  <div className="text-lg font-bold text-white">3</div>
+                  <div className="text-[10px] text-zinc-500 font-medium">Languages</div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center gap-1"><Zap size={14} className="text-indigo-400" />Gemini</div>
+                  <div className="text-[10px] text-zinc-500 font-medium">AI Engine</div>
+                </div>
+                <div className="bg-white/5 rounded-xl p-3 border border-white/5 text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center gap-1"><MapPin size={14} className="text-emerald-400" />Maps</div>
+                  <div className="text-[10px] text-zinc-500 font-medium">Location Data</div>
+                </div>
+              </div>
+
+              <p className="text-center text-[11px] text-zinc-600">
+                © 2026 Atlas AI • v2.0.0
+              </p>
             </div>
           )}
 

@@ -106,7 +106,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
 
     // Physics Constants - TUNED FOR ORGANIC FLUIDITY
     const springStrength = 0.02; // Stronger spring for faster return
-    const friction = 0.94 // Slightly more friction
+    const friction = 0.94; // Slightly more friction
 
     interface Dot {
       x: number; y: number; z: number;
@@ -169,6 +169,27 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
 
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
+
+      // Ambient glow behind sphere
+      const glowRadius = globeRadius * 1.8;
+      const glowGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
+      if (isSpeaking) {
+        glowGradient.addColorStop(0, 'rgba(129, 120, 255, 0.12)');
+        glowGradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.05)');
+        glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else if (isListening) {
+        glowGradient.addColorStop(0, 'rgba(50, 220, 255, 0.10)');
+        glowGradient.addColorStop(0.5, 'rgba(50, 200, 255, 0.04)');
+        glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else {
+        glowGradient.addColorStop(0, 'rgba(110, 110, 245, 0.08)');
+        glowGradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.03)');
+        glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
 
       // Decay Scatter
       if (scatterRef.current.intensity > 0) {
@@ -381,8 +402,9 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
-    document.addEventListener('touchend', handleInteractionEnd); // Use document for reliability
+    document.addEventListener('touchend', handleInteractionEnd);
     document.addEventListener('touchcancel', handleInteractionEnd);
+    canvas.addEventListener('mouseleave', handleInteractionEnd);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
@@ -393,6 +415,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
       window.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleInteractionEnd);
       document.removeEventListener('touchcancel', handleInteractionEnd);
+      canvas.removeEventListener('mouseleave', handleInteractionEnd);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('touchstart', handleTouchStart);
@@ -401,7 +424,7 @@ export const SphereAnimation: React.FC<SphereAnimationProps> = ({ isSpeaking = f
   }, [isSpeaking, isListening]);
 
   return (
-    <div ref={parentRef} className="w-full h-full absolute inset-0 overflow-hidden">
+    <div ref={parentRef} className="w-full h-full absolute inset-0 overflow-hidden" style={{ willChange: 'transform' }}>
       <canvas ref={canvasRef} className="block w-full h-full" style={{ touchAction: 'none' }} />
     </div>
   );

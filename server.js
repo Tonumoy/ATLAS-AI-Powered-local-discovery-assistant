@@ -3,7 +3,8 @@ import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { existsSync } from 'fs';
 
 // Load environment variables from .env.local
 const __filename = fileURLToPath(import.meta.url);
@@ -11,11 +12,45 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '.env.local') });
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+
+// --- Rate Limiter (in-memory, per IP) ---
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 100; // requests per window
+
+const rateLimiter = (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+
+    if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW) {
+        rateLimitMap.set(ip, { windowStart: now, count: 1 });
+        return next();
+    }
+
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX) {
+        return res.status(429).json({ error: 'Too many requests. Please try again in a minute.' });
+    }
+    return next();
+};
+
+app.use('/api', rateLimiter);
+
+// Clean up old rate limit entries every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap.entries()) {
+        if (now - entry.windowStart > RATE_LIMIT_WINDOW * 2) {
+            rateLimitMap.delete(ip);
+        }
+    }
+}, 5 * 60 * 1000);
 
 // Atlas System Instruction
 const SYSTEM_INSTRUCTION = `
@@ -275,7 +310,12 @@ When in doubt: **Less talk, more action.** Find the place, format it cleanly, se
 
 // Health endpoint
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'OK',
+        version: '2.0.0',
+        timestamp: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()) + 's'
+    });
 });
 
 // Chat endpoint
@@ -289,7 +329,19 @@ app.post('/api/chat', async (req, res) => {
 
     const { history, prompt, location, language, userProfile, mode } = req.body;
 
+    // --- Input Validation ---
+    if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: "Missing or invalid 'prompt' field." });
+    }
+    if (prompt.length > 5000) {
+        return res.status(400).json({ error: "Prompt too long. Maximum 5000 characters." });
+    }
+
     const ai = new GoogleGenAI({ apiKey });
+
+    // Create an abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
     try {
         // Mode: Title Generation
@@ -301,6 +353,7 @@ app.post('/api/chat', async (req, res) => {
                     parts: [{ text: `Create a short, elegant 2-3 word title for a conversation starting with: "${prompt}". No quotes. Return ONLY the title text.` }]
                 }],
             });
+            clearTimeout(timeoutId);
             const title = response.text ? response.text.trim() : "New Journey";
             return res.json({ title });
         }
@@ -349,20 +402,40 @@ app.post('/api/chat', async (req, res) => {
             config
         });
 
+        clearTimeout(timeoutId);
+
         const text = response.text || "I found the place, but the connection is a bit fuzzy. Mind asking that one more time?";
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
         return res.json({ text, groundingChunks });
 
     } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error.name === 'AbortError') {
+            console.error("Gemini API Timeout (30s)");
+            return res.status(504).json({ error: "The request took too long. Please try again." });
+        }
+
         console.error("Gemini API Error:", error);
         return res.status(500).json({ error: error.message || "Internal Server Error" });
     }
 });
 
+// --- Serve Frontend (Production) ---
+const distPath = resolve(__dirname, 'dist');
+if (existsSync(distPath)) {
+    app.use(express.static(distPath));
+    // Client-side routing fallback: serve index.html for all non-API routes
+    app.get('*', (req, res) => {
+        res.sendFile(join(distPath, 'index.html'));
+    });
+    console.log('📦 Serving frontend from dist/');
+}
+
 // Start server
-app.listen(PORT, () => {
-    console.log(`\n🌍 Atlas server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🌍 Atlas server running on http://0.0.0.0:${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/api/health`);
     console.log(`   Chat API: http://localhost:${PORT}/api/chat (POST)\n`);
 });

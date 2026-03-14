@@ -23,7 +23,7 @@ export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocatio
 
   if (!chunk.maps) return null;
 
-  const { title, googleMapsUri, rating, userReviewCount } = chunk.maps;
+  const { title, googleMapsUri, rating, userReviewCount, placeAnswerSources } = chunk.maps;
   const metadata = chunk.extractedMetadata;
 
   // Fallback values
@@ -93,6 +93,13 @@ export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocatio
           <h4 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors leading-tight mb-1">
             {title}
           </h4>
+
+          {/* Review Snippet */}
+          {placeAnswerSources?.reviewSnippets?.[0]?.content && (
+            <p className="text-xs text-zinc-500 mt-1 line-clamp-2 italic">
+              "{placeAnswerSources.reviewSnippets[0].content}"
+            </p>
+          )}
         </div>
       </a>
 
@@ -102,7 +109,7 @@ export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocatio
           href={finalMapsLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          className="flex flex-col items-center justify-center py-3 min-h-[44px] hover:bg-white/5 transition-colors group/btn cursor-pointer"
           title="Directions"
         >
           <Navigation size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />
@@ -111,7 +118,7 @@ export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocatio
 
         <button
           onClick={handleRide}
-          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          className="flex flex-col items-center justify-center py-3 min-h-[44px] hover:bg-white/5 transition-colors group/btn cursor-pointer"
           title="Get a Ride"
         >
           <Car size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />
@@ -120,7 +127,7 @@ export const GroundingCard: React.FC<GroundingCardProps> = ({ chunk, userLocatio
 
         <button
           onClick={handleBook}
-          className="flex flex-col items-center justify-center py-3 hover:bg-white/5 transition-colors group/btn cursor-pointer"
+          className="flex flex-col items-center justify-center py-3 min-h-[44px] hover:bg-white/5 transition-colors group/btn cursor-pointer"
           title="Book Table"
         >
           <Calendar size={16} className="text-slate-400 group-hover/btn:text-indigo-400 mb-1" />

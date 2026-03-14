@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Send, Mic, MicOff, Volume2, VolumeX, Languages, X, MessageSquare, Menu, ChevronDown, Layout, Headphones, Sparkles, MapPin, ArrowUp } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Languages, X, MessageSquare, Menu, ChevronDown, Layout, Headphones, Sparkles, MapPin, ArrowUp, ThumbsUp, ThumbsDown, Zap } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { GroundingCard } from './components/GroundingCard';
@@ -28,6 +28,43 @@ const LANGUAGES = [
 ];
 
 type ViewMode = 'landing' | 'chat' | 'voice';
+
+// Time-aware greeting
+const getGreeting = (name: string): string => {
+  const hour = new Date().getHours();
+  const displayName = name?.split(' ')[0] || 'Traveler';
+  if (hour < 12) return `Good morning, ${displayName}`;
+  if (hour < 17) return `Good afternoon, ${displayName}`;
+  return `Good evening, ${displayName}`;
+};
+
+// Error Boundary
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#0f1117] flex items-center justify-center p-6">
+          <div className="text-center space-y-4">
+            <div className="text-4xl">🌍</div>
+            <h1 className="text-xl font-bold text-white">Something went wrong</h1>
+            <p className="text-zinc-400 text-sm">Atlas encountered an unexpected error.</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-colors font-medium">
+              Reload Atlas
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   // --- Auth & User State ---
@@ -133,9 +170,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-    }
+    // Always persist sessions, even when empty (fixes: can't delete all sessions)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
   }, [sessions]);
 
   useEffect(() => {
@@ -366,6 +402,11 @@ function App() {
     return () => { };
   }, []);
 
+  // Keep handleSendRef in sync with latest handleSend
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
+
   // Handle voice send message event
   useEffect(() => {
     const handleVoiceSendMessage = (e: CustomEvent) => {
@@ -373,13 +414,11 @@ function App() {
       console.log('Voice send message received:', text);
 
       if (text && text.trim().length > 0 && !isLoadingRef.current) {
-        // Set the input and trigger send
         setInput(text);
         inputRef.current = text;
 
-        // Wait for state to update then send
         setTimeout(() => {
-          handleSend();
+          handleSendRef.current?.();
         }, 50);
       }
     };
@@ -419,6 +458,9 @@ function App() {
 
     window.speechSynthesis.speak(utterance);
   };
+
+  // Ref to always have the latest handleSend (fixes stale closure in voice event)
+  const handleSendRef = useRef<(() => void) | null>(null);
 
   const handleSend = async () => {
     // Check both state and ref (ref is more up-to-date for voice mode)
@@ -626,7 +668,7 @@ function App() {
                 onClick={() => setIsModeMenuOpen(!isModeMenuOpen)}
                 className="flex items-center gap-2 text-lg font-medium text-slate-200 hover:text-white transition-colors opacity-90 hover:opacity-100"
               >
-                <span className="tracking-tight">Atlas 1.0</span>
+                <span className="tracking-tight">Atlas 2.0</span>
                 <ChevronDown size={14} className={`text-slate-500 transition-transform ${isModeMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
@@ -753,7 +795,7 @@ function App() {
             <div className="w-full max-w-2xl text-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="space-y-4">
                 <h1 className="text-4xl md:text-5xl font-medium text-white tracking-tight">
-                  Good evening, {user?.name?.split(' ')[0] || 'Traveler'}
+                  {getGreeting(user?.name)}
                 </h1>
                 <p className="text-lg text-slate-400">Where shall we explore today?</p>
               </div>
@@ -791,6 +833,12 @@ function App() {
                     {suggestion}
                   </button>
                 ))}
+              </div>
+
+              {/* Powered by badge */}
+              <div className="flex items-center justify-center gap-2 pt-4 opacity-40">
+                <Zap size={12} className="text-indigo-400" />
+                <span className="text-[11px] text-zinc-500">Powered by Gemini 2.5 · Google Maps</span>
               </div>
             </div>
           </main>
@@ -860,6 +908,10 @@ function App() {
                           {msg.groundingChunks.map((chunk, idx) => <GroundingCard key={idx} chunk={chunk} userLocation={location} />)}
                         </div>
                       )}
+                      {/* Feedback widget for AI responses */}
+                      {msg.role === 'model' && !msg.isError && (
+                        <FeedbackWidget messageId={msg.id} />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -868,7 +920,11 @@ function App() {
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0 flex items-center justify-center mt-1 animate-pulse">
                       <AtlasLogo size={16} className="text-white" />
                     </div>
-                    <div className="flex items-center text-slate-500 text-sm">Thinking...</div>
+                    <div className="flex-1 max-w-md space-y-3 py-2">
+                      <div className="h-3 rounded-full animate-shimmer w-3/4" />
+                      <div className="h-3 rounded-full animate-shimmer w-1/2" />
+                      <div className="h-3 rounded-full animate-shimmer w-5/6" />
+                    </div>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -905,4 +961,66 @@ function App() {
   );
 }
 
-export default App;
+// Feedback Widget Component
+const FEEDBACK_KEY = 'atlas_feedback';
+
+function FeedbackWidget({ messageId }: { messageId: string }) {
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '{}');
+      return stored[messageId] || null;
+    } catch { return null; }
+  });
+
+  const handleFeedback = (type: 'up' | 'down') => {
+    const newFeedback = feedback === type ? null : type;
+    setFeedback(newFeedback);
+    try {
+      const stored = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '{}');
+      if (newFeedback) {
+        stored[messageId] = newFeedback;
+      } else {
+        delete stored[messageId];
+      }
+      localStorage.setItem(FEEDBACK_KEY, JSON.stringify(stored));
+    } catch { }
+  };
+
+  return (
+    <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{ opacity: feedback ? 1 : undefined }}>
+      <button
+        onClick={() => handleFeedback('up')}
+        className={`p-1.5 rounded-lg transition-all ${
+          feedback === 'up'
+            ? 'text-emerald-400 bg-emerald-500/10 animate-feedback-pop'
+            : 'text-zinc-600 hover:text-zinc-300 hover:bg-white/5'
+        }`}
+        title="Helpful"
+      >
+        <ThumbsUp size={13} />
+      </button>
+      <button
+        onClick={() => handleFeedback('down')}
+        className={`p-1.5 rounded-lg transition-all ${
+          feedback === 'down'
+            ? 'text-rose-400 bg-rose-500/10 animate-feedback-pop'
+            : 'text-zinc-600 hover:text-zinc-300 hover:bg-white/5'
+        }`}
+        title="Not helpful"
+      >
+        <ThumbsDown size={13} />
+      </button>
+    </div>
+  );
+}
+
+// Wrap App with ErrorBoundary
+function WrappedApp() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default WrappedApp;

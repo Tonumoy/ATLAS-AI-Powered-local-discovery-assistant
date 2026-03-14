@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Mail, Lock } from 'lucide-react';
+import { ArrowRight, Mail, Lock, User } from 'lucide-react';
 import { AtlasLogo } from './AtlasLogo';
 
 interface AuthScreenProps {
@@ -8,24 +8,42 @@ interface AuthScreenProps {
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    // Basic validation
+    if (!email.includes('@') || !email.includes('.')) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters');
+      return;
+    }
+
     setLoading(true);
 
     // Simulate API call
     setTimeout(() => {
+      const displayName = !isLogin && name.trim()
+        ? name.trim()
+        : email.split('@')[0] || 'Atlas Explorer';
+
       onLogin({
-        id: 'user-123',
-        name: email.split('@')[0] || 'Atlas Explorer',
+        id: 'user-' + Date.now(),
+        name: displayName,
         email: email,
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + email
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
       });
       setLoading(false);
-    }, 1500);
+    }, 1200);
   };
 
   return (
@@ -50,6 +68,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name field - only for Sign Up */}
+          {!isLogin && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-500 uppercase ml-1">Full Name</label>
+              <div className="relative">
+                <User className="absolute left-4 top-3.5 text-zinc-500" size={18} />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-black/20 border border-white/10 text-white rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-zinc-600"
+                  placeholder="Your name"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-xs font-semibold text-zinc-500 uppercase ml-1">Email</label>
             <div className="relative">
@@ -58,7 +93,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 className="w-full bg-black/20 border border-white/10 text-white rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-zinc-600"
                 placeholder="you@example.com"
               />
@@ -73,12 +108,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setError(''); }}
                 className="w-full bg-black/20 border border-white/10 text-white rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-zinc-600"
                 placeholder="••••••••"
               />
             </div>
           </div>
+
+          {/* Validation Error */}
+          {error && (
+            <p className="text-rose-400 text-xs font-medium px-1 animate-in fade-in duration-200">{error}</p>
+          )}
 
           <button
             type="submit"
@@ -106,7 +146,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
           <p className="text-center text-sm text-zinc-500">
             {isLogin ? "Don't have an account? " : "Already have an account? "}
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => { setIsLogin(!isLogin); setError(''); }}
               className="text-indigo-400 hover:text-indigo-300 font-medium"
             >
               {isLogin ? 'Sign Up' : 'Log In'}
@@ -116,7 +156,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
       </div>
 
       <div className="absolute bottom-4 text-zinc-600 text-xs">
-        © 2025 Atlas AI. All rights reserved.
+        © 2026 Atlas AI. All rights reserved.
       </div>
     </div>
   );
