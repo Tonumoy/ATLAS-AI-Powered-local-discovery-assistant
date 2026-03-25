@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Send, Mic, MicOff, Volume2, VolumeX, Languages, X, MessageSquare, Menu, ChevronDown, Layout, Headphones, Sparkles, MapPin, ArrowUp, ThumbsUp, ThumbsDown, Zap } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Languages, X, MessageSquare, Menu, ChevronDown, Layout, Headphones, Sparkles, MapPin, ArrowUp, ThumbsUp, ThumbsDown, Zap, Users } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MarkdownRenderer } from './components/MarkdownRenderer';
 import { GroundingCard } from './components/GroundingCard';
@@ -13,6 +13,7 @@ import { generateResponse, generateTitle } from './services/geminiService';
 
 const STORAGE_KEY = 'geoguide_sessions';
 const USER_KEY = 'geoguide_user';
+const SESSION_ID_KEY = 'atlas_session_id';
 
 interface IWindow extends Window {
   SpeechRecognition: any;
@@ -67,6 +68,36 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 function App() {
+  const [activeUsers, setActiveUsers] = useState(0);
+
+  // --- Heartbeat: ping server every 30s ---
+  useEffect(() => {
+    // Get or create a persistent session ID
+    let sessionId = localStorage.getItem(SESSION_ID_KEY);
+    if (!sessionId) {
+      sessionId = uuidv4();
+      localStorage.setItem(SESSION_ID_KEY, sessionId);
+    }
+
+    const sendHeartbeat = async () => {
+      try {
+        const res = await fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveUsers(data.active || 0);
+        }
+      } catch { /* silent fail */ }
+    };
+
+    sendHeartbeat(); // immediate first ping
+    const interval = setInterval(sendHeartbeat, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // --- Auth & User State ---
   const [user, setUser] = useState<any>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -798,6 +829,20 @@ function App() {
                   {getGreeting(user?.name)}
                 </h1>
                 <p className="text-lg text-slate-400">Where shall we explore today?</p>
+
+                {/* Active users indicator */}
+                {activeUsers > 0 && (
+                  <div className="flex items-center justify-center gap-2 pt-1 animate-in fade-in duration-500">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      <Users size={11} className="inline mr-1 text-zinc-500" />
+                      {activeUsers} exploring right now
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Search Input Landing */}

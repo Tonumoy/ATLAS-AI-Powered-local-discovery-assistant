@@ -52,6 +52,47 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
+// --- Analytics Tracker (In-Memory) ---
+const analytics = {
+    activeSessions: new Map(), // sessionId -> { lastSeen, ip, userAgent }
+    today: {
+        date: new Date().toISOString().split('T')[0],
+        messages: 0,
+        sessions: new Set(),
+        queries: [],     // last 50 queries
+        errors: 0,
+    },
+    allTime: {
+        totalMessages: 0,
+        totalSessions: new Set(),
+        serverStartedAt: new Date().toISOString(),
+    }
+};
+
+// Reset daily stats at midnight
+const checkDateReset = () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (analytics.today.date !== today) {
+        analytics.today = {
+            date: today,
+            messages: 0,
+            sessions: new Set(),
+            queries: [],
+            errors: 0,
+        };
+    }
+};
+
+// Clean up stale sessions (not seen in 45 seconds)
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, session] of analytics.activeSessions.entries()) {
+        if (now - session.lastSeen > 45000) {
+            analytics.activeSessions.delete(id);
+        }
+    }
+}, 30 * 1000);
+
 // Atlas System Instruction
 const SYSTEM_INSTRUCTION = `
 You are "Atlas" - a sophisticated AI-powered local discovery assistant with deep expertise in location intelligence, user sentiment analysis, and conversational recommendation systems.
@@ -318,6 +359,75 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// --- Heartbeat (frontend pings every 30s) ---
+app.post('/api/heartbeat', (req, res) => {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'Missing sessionId' });
+
+    checkDateReset();
+    analytics.activeSessions.set(sessionId, {
+        lastSeen: Date.now(),
+        ip: req.ip || 'unknown',
+    });
+    analytics.today.sessions.add(sessionId);
+    analytics.allTime.totalSessions.add(sessionId);
+
+    res.json({ active: analytics.activeSessions.size });
+});
+
+// --- Public Stats (active count only) ---
+app.get('/api/stats', (req, res) => {
+    res.json({
+        active: analytics.activeSessions.size,
+    });
+});
+
+// --- Private Admin Analytics ---
+app.get('/api/admin/analytics', (req, res) => {
+    const adminKey = process.env.ADMIN_KEY || 'atlas-admin-2026';
+    const providedKey = req.query.key || req.headers['x-admin-key'];
+
+    if (providedKey !== adminKey) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    checkDateReset();
+
+    // Count top queries
+    const queryCount = {};
+    for (const q of analytics.today.queries) {
+        const normalized = q.toLowerCase().trim();
+        queryCount[normalized] = (queryCount[normalized] || 0) + 1;
+    }
+    const topQueries = Object.entries(queryCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([query, count]) => ({ query, count }));
+
+    res.json({
+        realtime: {
+            activeUsers: analytics.activeSessions.size,
+            activeSessions: Array.from(analytics.activeSessions.entries()).map(([id, s]) => ({
+                id: id.substring(0, 8) + '...',
+                seenAgo: Math.floor((Date.now() - s.lastSeen) / 1000) + 's',
+            })),
+        },
+        today: {
+            date: analytics.today.date,
+            uniqueSessions: analytics.today.sessions.size,
+            messages: analytics.today.messages,
+            errors: analytics.today.errors,
+            topQueries,
+        },
+        allTime: {
+            totalMessages: analytics.allTime.totalMessages,
+            totalUniqueSessions: analytics.allTime.totalSessions.size,
+            uptime: Math.floor(process.uptime()) + 's',
+            serverStartedAt: analytics.allTime.serverStartedAt,
+        }
+    });
+});
+
 // Chat endpoint
 app.post('/api/chat', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -328,6 +438,15 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const { history, prompt, location, language, userProfile, mode } = req.body;
+
+    // --- Track analytics ---
+    checkDateReset();
+    analytics.today.messages++;
+    analytics.allTime.totalMessages++;
+    if (prompt && mode !== 'title') {
+        analytics.today.queries.push(prompt);
+        if (analytics.today.queries.length > 200) analytics.today.queries.shift();
+    }
 
     // --- Input Validation ---
     if (!prompt || typeof prompt !== 'string') {
@@ -437,5 +556,7 @@ if (existsSync(distPath)) {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🌍 Atlas server running on http://0.0.0.0:${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/api/health`);
-    console.log(`   Chat API: http://localhost:${PORT}/api/chat (POST)\n`);
+    console.log(`   Chat API: http://localhost:${PORT}/api/chat (POST)`);
+    console.log(`   Stats: http://localhost:${PORT}/api/stats`);
+    console.log(`   Admin: http://localhost:${PORT}/api/admin/analytics?key=atlas-admin-2026\n`);
 });
